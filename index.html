@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="description" content="En virtuell terminal som presenterar Joakim Sandeberger!">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="icon" type="image/x-icon" href="favicon.ico">  
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+    <style>
+        body {
+            background-color: black;
+            margin: 0;
+            overflow: hidden;
+        }
+        
+        crt_canvas {
+            display: block;
+            background-color: #000;
+        }
+        
+        .terminal {
+            font-family: 'VT323', monospace;
+            font-size: 42px;
+            line-height: 1.4;
+            color: lime;
+            position: relative;
+            top: 0;
+            left: 0;
+            padding: 20px;
+            white-space: pre;
+            text-shadow: 0 0 5px lime, 0 0 10px lime;
+            white-space: pre-wrap;
+            max-width: 100%;
+        }
+
+        .terminal a {
+            color: white;
+            text-decoration: underline;
+            text-shadow: 0 0 5px white, 0 0 10px white;
+        }
+
+        .terminal-text {
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+
+        .terminal::after {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: repeating-linear-gradient(
+                0deg,
+                rgba(0, 0, 0, 0.1),
+                rgba(0, 0, 0, 0.1) 1px,
+                transparent 1px,
+                transparent 2px
+            );
+            pointer-events: none;
+        }
+
+        .cursor {
+            display: inline-block;
+            width: 12px;
+            height: 23px;
+            background-color: lime;
+            animation: blink 1s steps(2, start) infinite;
+            text-shadow: 0 0 5px lime, 0 0 10px lime;
+        }
+
+        #starfield {
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: -4;
+        }
+
+        #cubeCanvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: -1;
+        }
+
+        #crt {
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: -3;
+        }
+
+
+        @keyframes blink {
+            50% {
+                background-color: transparent;
+                text-shadow: none;
+            }
+        }
+    </style>
+    <title>Joakim Sandeberger</title>
+    <script type="text/javascript">
+        var host = "kodar.ninja";
+        if ((host === window.location.host) && (window.location.protocol != "https:")){
+          location.replace(`https:${location.href.substring(location.protocol.length)}`);
+        }
+    </script>
+</head>
+<body>
+      
+    <div class="terminal" id="terminal">   
+        <canvas id="crt"></canvas>      
+        <canvas id="starfield"></canvas> 
+        <canvas id="cubeCanvas"></canvas>          
+        <div class="terminal-text"><span class="cursor"></span></div>            
+    </div>
+    
+    <script src="cube.js"></script> 
+    <script src="starfield.js"></script>  
+    <script src="crt.js"></script>  
+
+    <script>
+
+        const terminal = document.getElementById('terminal');
+        const cursor = document.querySelector('.cursor');
+        let isInterrupted = false;
+        let isTypingEnabled = false;
+        let isPaused = false;
+        const loadpre="\nLOAD \"";
+        const runit="\n\\pRUN\n\\p\\p\\c\n";
+        const loadpost="\",8"+runit;
+        const menu='\nKommandon: [[Anställningar]] [[Kunskap]] [[Projekt]] [[Kontakt]] (CTRL+C Avbryter)\n_READY._\n';
+        const proj_botek="\n- _Infinity_ 2021-Nu (Nästa generations Helios-System; C++20, Mqtt, Protobuf)\n- _Evolution 3_ 2021-2022 (Ny generations rutthanteringssystem; Angular, C#, Typescript, PostgreSQL) \n- _Hyperion_ 2016-2017 (Design och utveckling av integrationsmotorn Hyperion; C#, Android, Java)\n- _FatMiddleman_ 2016-2017 (Design och utveckling av FatMiddleman för Botek. Detta är en kommunikationsserver för att komma åt och kunna supporta eller uppdatera IoT-mjukvaran i lastbilar. Projektet utvecklades med tekniker som Linux, C++11.)\n- _PetsmoPumpManager_ 2016-2017 (Design och utveckling av Petsmo Pump Manager för Petsmo. Programmet var ett användargränssnitt för att starta pumpningar och fyllningar av tankbilar som kör djurfoder. Programmet var utvecklat för flera plattformar som Android och Windows med hjälp av C# och Xamarin.)\n- _EvolutionCollector_ 2015-2016 (Vidareutvecklat delar av EvolutionCollector och EvolutionOffice för Botek. Jag har exempelvis byggt en helt ny kartmotor och en helt nytt kommunikations-skikt. Projekten utvecklades med bla tekniker som C#, .NET, WPF, WCF, Android, Java, mySQL.)\n- _HeliosWeb_ 2015-2017 (Initierat, designat och utvecklat HeliosWeb för Botek. HeliosWeb är en webbportal som används av Boteks kunder men även av Boteks egna support-avdelning. Med hjälp av portalen så kan man se tömningar/vägningar som har gjorts av lastbilar men även få detaljerad information om hur utrustning i alla uppkopplade bilarna mår. Portalen utvecklades bla med C#, WCF, TelerikUI, MVC, mySQL)\n- _B5000_ 2014-2017 (Initierat, designat och utvecklat Operativsystemet för Blackbox B5000 för Botek. B5000 är en liten uppkopplad Linux-dator som installeras på lastbilar runt om i världen. Operativsystemet bygger på Linux Ångström Distributionen och är skräddarsydd för att köra Boteks Helios. Tekniker som användes: Linux, Mono, Embedded, C++)\n- _Helios_ 2014-Nu (Initierat, designat och utvecklat stora delar av Helios för Botek. Helios är mjukvaran som styr utrustning som byggs in i lastbilar. Helios samlar även in data till en central databas. Programvaran utvecklades med tekniker som C#, C++, Bash, Mono, .NET, WCF och kan köras både under Windows eller Linux.)\n";
+        const proj_saft="\n- _Kadmium_ 2019-2021 (Ett medicinsk register för provtagningar av urin och blodprov som en webbapp. Java, javascript, Buefy och Vue)\n- _Flow_ 2019-2020 (Ett system som visualiserar och fångar data i fabrikens process, Kodat med NovacuraFlow-script)\n- _Lean för M3_ 2020 (Förändringar av affärsflöden. Kodat med Jscript.NET och XAML)\n- _Underhållstjänster_ 2020 (Integrationer mellan FTP och MFiles, automatiserade databaskörningar. Kodat i C#)\n- _Intranät_ 2020 (Sharepoint och scraper i C#) \n- _Saft Intelligent Battery_ 2020-2021 (Vidareutveckling inhouse av uppkopplade batterier; IoT, embedded, Yocto, C#, Linux,Android, IOS, Azure, Angular, Typescript)\n";
+        const proj_sweco="\n- _Edp+_ 2019 (Nyutveckling för webbapplikationen edp+. Även förnyat hela infrastrukturen för systemet (dvs ny server, webb samt databas). Kodat i ASP.NET+ MSSQL)\n- _Bim i förvaltning_ 2019 (Arbetat med ”Bim i Förvaltning” som visualiserar Bim-modeller med realtids uppkopplad IoT-data i 3D. Framförallt arbetat med Azure, IoT integrationsdelar och exportverktyg i C#.)\n- _Sweco VR-motor_ 2019 (Vidareutveckling och felrättningar av 3d exportverktyg. Verktyget exporterar bim-modeller till Swecos Virtual Reality motor. Projektet är skrivet i C# med hjälp av gränsnitt som NavitAPI och RevitAPI)\n- _Elements_ 2019 (Nya shaders för Swecos 3D-motor)\n- _Jaktadmin_ 2018 (Utveckling av kartmotor för Jaktadmin. Detta var till en webbsida som byggdes för Länsstyrelsen. Projektet skrevs i javascript och använde sig av DOJO-ramverket och ESRI ArcGis.)\n- _Brandfält_ 2018 (Utveckling av Brandfält för Länsstyrelsen. Webbsidan var byggt i ASP.NET med stora delar i javascript.)\n- _Stabila Identiteteter/ANDA_ 2018-2019 (Utveckling av exportverktyget StabilaIdentiteter för trafikverket. Projektet byggdes i C# med en MS SQL Server.)\n- _Origio-komponent_ 2019 (Arbete med kartmotorn Origo för Eskilstuna kommun. Byggde modulen FME-Webb i javascript.)\n";
+        const proj_sigma="\n- _Asimov_ 2013 (Asimov för ACG Pulse. Asimov är en robotiserat garderobsystem för större företag. Systemet sorterade kläder med hjälp av rfid. Jag arbetade med integrationsservern och denna var skriven med C++11 och ActiveMQ.)\n";
+        const proj_vistit="\n- _Asimov_ 2013 (Asimov för ACG Pulse. Asimov är en robotiserat garderobsystem för större företag. Systemet sorterade kläder med hjälp av rfid. Jag arbetade med integrationsservern och denna var skriven med C++11 och ActiveMQ.)\n- _Oracle för EnterpriseDb_ 2012-2013 (Migration Oracle till EnterpriseDb för TeamSportias alla system.)\n- _Ralf_ 2013 (Ralf för TeamSportia)\n- _ESTid_ 2013 (ESTid för One Nordic AB, ESAB. Kodat i C#.)\n- _Tips Butik_ 2012-2013 (TipsButik för TeamSportia. En kund klubb som var kodad i C#.)\n- _BRUS_ 2008-2012 (Brus för Ringhals. Ett ett mätsystem för falltider av styrstavar i härden. Kodat i Java.)\n- _MatchX_ 2012 (MatchX för ITAB. Automatiserade kassasystem. Känner igen varorna som passerar tunnel. Kodat i C++.)\n- _Konfys_ 2011-2012 (Konfys för Ringhals. Kodat i PLSQL)\n- _Loggbok_ 2011 (Loggbok för Ringhals. Kodat i PLSQL)\n- _ES136_ 2009-2010 (Integration ES136 för EON – Elektro Sandberg)\n";
+        const proj_sogeti="\n- _Fanny_ 2007 (Webbgränssnittet för Fanny, Jordbruksverket. Kodat i JAVA.)\n- _JBV Förvaltning_ 2004-2008 (Förvaltning och utveckling av olika system för Jordbruksverket. Mest PLSQL)\n- _WinExcon_ 2006 (WinExcon för SAAB Training Systems AB. 3D-visualisering av stridsövningar. Kodat i C++)\n- _Floom_ 2006 (Floom för Fagerhults Belysning AB. Affärsystem kodat i RPG/400.)\n";
+        const proj_stonebrix="\n- _Firedrill_ 2003-2005 (Firedrill Palm-app för QinetiQ. Kodat i C++)\n- _TankFarm_ 2004 (Tankfarm för Shell Raffinaderi AB. Kodat i ASP.NET.)\n- _Modes & Targets_ 2002-2004 (Modes & Targets för Shell Raffinaderi AB. Kodat i ASP.)\n";
+        const proj_rapidinformation="\n- _Firedrill_ 2003-2005 (Firedrill Palm-app för QinetiQ. Kodat i C++)\n- _TankFarm_ 2004 (Tankfarm för Shell Raffinaderi AB. Kodat i ASP.NET.)\n- _Modes & Targets_ 2002-2004 (Modes & Targets för Shell Raffinaderi AB. Kodat i ASP.)\n";
+        const proj_amg="\n- _Maxbox spel_ 2002 (3D-spel som följde Maxbox för Max hamburgerrestauranger. Kodat i C++.)\n- _Fridas hemliga dagbok_ 2001 (Fridas hemliga dagbok för FRIDA förlag. Kodat i C++.)\n- _Woodii_ 2001 (Flera spel för TV-programmet Woodii på Svenska TV3. Kodat i C++.)\n- _På rymmen_ 1999 (3D spelet ”På rymmen”, CD-rom spel i samarbete med TV4 . Kodat i C++.)\n";
+        const proj_intentia="\n- _Movex_ 1997-1999 (Diverse integrationer, ändringar och tillägg av och för M3/Movex. Kodai i RPG/400 och JAVA.)\n";
+        const proj_funcom="\n- _Dragonheart Fire & Steel_ 1995-1997 (Sega Saturn konverteringen av spelet Dragonheart Fire & Steel)\n- _Wintergold_ 1994-1995 (Spelprogrammering av Winter Gold för Nintendo of America. Kodat i C.)\n- _Split Reality_ 1994 (Spelutveckling av Split Reality för JVC. Kodat i C. Blev senare The Longest Journey)\n- _Tom & Jerry_ 1994 (Spelutveckling av Tom & Jerry för SUNSOFT, Sega Genesis. Kodat i 68k Assembler.)\n- _Jack Nicklaus Golf_ 1994 (Spelutveckling av Jack Nicklaus Golf för SUNSOFT, Sega Genesis. Kodat i 68k Assembler.)\n";
+        const proj_toshi="\n- _Eductainment_ 1990-1994 (Utveckling av flera mindre spel för barn och handikappade. Kodat i C++, Assembler och AMOS.)\n";
+        const presentation="\\pRUN\n\\p\\p\\c![[jag.gif]]__JOAKIM SANDEBERGER__\n\n___Profil___\nJag är en driven och erfaren systemutvecklare med en passion för att lära mig nya saker. Med över 30 års erfarenhet i branschen och en bred kunskap inom olika områden inom programmering är jag väl rustad för att ta mig an nya utmaningar. Min styrka ligger i att skapa robusta och hållbara system och jag är särskilt intresserad av arkitektur och tekniska lösningar.\n\n___Erfarenhet___\nJag har arbetat med många olika typer av programmeringsuppdrag, från spelutveckling till webbutveckling, affärssystem och integrationer. Jag har även erfarenhet av GIS, BIM, Augmented Reality, Android, IoT och inbyggda system. Mitt arbete har innefattat en mängd olika programmeringsspråk och databastyper, inklusive Java, C++, C#, MS SQL, Oracle, DB2, PostgreSQL och MySql.\n\nMin erfarenhet sträcker sig långt utanför arbetet och jag är passionerad över programmering och teknik. Jag ägnar ofta min fritid åt att lära mig nya saker och utforska nya tekniker och verktyg.\n\n___Arkitektur___\nDe senaste åren har jag blivit särskilt intresserad av arkitekturen av system och hur man skapar solida och pålitliga lösningar. Jag är väl förtrogen med olika arkitekturstilar och har erfarenhet av att implementera dem i olika projekt.\n\n___Personliga egenskaper___\nJag är en noggrann och självgående person som tar ansvar för mina projekt och levererar kvalitetsarbete. Jag är öppen för nya idéer och har förmågan att lösa problem på ett effektivt sätt. Min passion för teknik och lärande gör mig alltid redo att ta mig an nya utmaningar och vidga mina kunskaper.\n\n___Fritid___\nPå min fritid spenderar jag mestadels tid med min familj, vilket inkluderar min fru, mina tre döttrar och fyra barnbarn. Utöver det ägnar jag tid åt mitt hus och våra husdjur.\n\\pAvslutningsvis\nJag är övertygad om att min breda kunskap och erfarenhet, tillsammans med min passion och drivkraft för teknik, skulle göra mig till en värdefull tillgång för vilket team eller projekt som helst.\\p\n\nTack för att du tog dig tid att läsa min personliga presentation.\n"+menu;
+        const boot="_*** KODAR.NINJA BASIC ***_\n_ 3071 BYTES FREE_\n_READY._\nLOAD \"CUBE.PRG\",8\n\\pRUN\n\\r\\p_READY._\n";
+        let text = boot+"\\pLOAD \"WHOAMI.PRG\",8\n"+presentation;
+
+        const virtualCmds ={
+            PRINT: "PRINT",
+            LOAD: "LOAD",
+        }
+        const myStrings = {
+            ANSTÄLLNINGAR: loadpre+'Employments.prg'+loadpost+'___Mina anställningar___\n- Jan 2021 - NU       [[BotekSystems]] (IoT-system med kringsystem)\n- Okt 2019 - Jan 2021 [[SaftBatteries]] (IIoT, IoT, Affärsystem)\n- Okt 2017 - Okt 2019 [[SwecoPosition]] (Konsult; GIS, BIM och Webb)\n- Dec 2013 - Okt 2017 [[BotekSystems]] (IoT-system med dess kringsystem) \n- Aug 2013 - Dec 2013 [[Sigma]] (Konsult; Systemutveckling, Integration)\n- Mar 2008 - Aug 2013 [[VistIT]] (Konsult; Systemutveckling, Integration och databas)\n-     2005 -     2008 [[Sogeti]] (Konsult; Systemutveckling och databas)\n-     2004 -     2005 [[Stonebrix]] (Konsult; Systemutveckling och databas)\n- Jun 2002 - Jan 2004 [[RapidInformation]] (Konsult; Systemutveckling, mobilitet och databas)\n- Jun 1999 - Maj 2002 [[ActiveMediaGroup]] (Spelutveckling)\n- Feb 1997 - Jun 1999 [[IntentiaConsulting]] (Konsult; Affärssytem, utbildare)\n- Jul 1994 - Jan 1997 [[Funcom]] (Spelutveckling)\n- Jan 1991 - Jun 1995 [[ToshiSoftware]] (Spelutveckling)\n'+menu,
+            KUNSKAP: loadpre+'Knowledge.prg'+loadpost+'__Ett urval av mina kunskaper/nyckelord__\n\n___Språk:___ Varianter av Assembler (Främst 6502, 68k, x86, SH2), C, C++, Java, C#, Javascript, Typescript, RPG/400, Varianter av SQL (Främst PL/SQL, TSQL), ASP.NET, Ruby\n___Webbutveckling:___ UX, HTML5, CSS, Frontend, Backend, Angular, Vue, IIS, NginX, Brotli, Origio, Webspeed\n___Mobile:___ Xamarin, Android, Mono\n___IoT:___ Azure, Cloud-computing, Edge-computing, Bigdata, embedded, krosskompilering\n___Kommunikation:___ Mqtt, Amqp, REST, Protobuf\n___Operativsystem:___ Windows, Linux, WinForms, WPF\n___Databases___: Oracle, MS SQL, PosgreSql, SQLLite, DB/400\n__Annat__: OpenCL, OpenGL, 3D, BIM, Agil, Scrum, Continous Delivery, Security, Spelutveckling\n'+menu,
+            PROJEKT: loadpre+'Project.prg'+loadpost+'__DETTA ÄR ETT URVAL AV MINA PROJEKT__\n\n![[b5000.gif]]__B5000 med Helios och HeliosWeb__\nJag har initierat, designat och utvecklat operativsystemet för Blackbox B5000 åt Botek. B5000 är en kompakt, uppkopplad Linux-dator som är avsedd att installeras på lastbilar över hela världen. Operativsystemet baseras på Linux-distributionen Ångström och är skräddarsytt för att köra Boteks Helios, som även behövde anpassas för att fungera i en blackbox.\n\nEn viktig aspekt av B5000 är dess förmåga att samla in data, vilket gör kommunikation och integrationer avgörande. Dessutom var det viktigt att systemet kunde underhållas och uppdateras på distans, både vad gäller mjukvara och operativsystem. Tekniker som användes under utvecklingsprocessen inkluderar: Linux, Mono, inbyggda system, C++, korskompilatorer och integrationer.\n\n\n\\p![[wintergold.gif]]__WinterGold__\nTillsammans med ett team på FUNCOM, utvecklade jag spelet WinterGold för Super Nintendo mellan 1994 och 1995. Spelet, som beställdes och lanserades av Nintendo, innehöll för den tiden avancerad realtids-3D-grafik. Detta möjliggjordes genom användning av ett så kallat FX2-chip i spelkassetterna, samt genom avancerade algoritmer för dekompression av förberäknad data.\nVill du se [[AllaProjekt]]? (CTRL+C Avbryter)\n'+menu,
+            KONTAKT: loadpre+'Contact.prg'+loadpost+'___Kontakt information:___\n\nNi kan nå mig på [070-8840600](tel:+4670-8840600)\nAlternativt maila mig på [joakim.sandeberger@kodar.ninja](mailto:joakim.sandeberger@kodar.ninja)\n[Linkedin](https://www.linkedin.com/in/joakim-sandeberger-04776a9/)\n[Github](https://github.com/sandeberger)\n[MobyGames](https://www.mobygames.com/person/241155/joakim-sandeberger/)\n\n[Ladda ner CV](https://kodar.ninja/JoakimSandeberger.pdf)\n[Du kan se min gamla presentations sida här](https://kodar.ninja/gammal/)\n'+menu,
+            BOTEKSYSTEMS: loadpre+'BotekSystems.prg'+loadpost+'Projekt:'+proj_botek+menu,
+            SAFTBATTERIES: loadpre+'SaftBatteries.prg'+loadpost+'Projekt:'+proj_saft+menu,
+            SWECOPOSITION: loadpre+'SwecoPosition.prg'+loadpost+'Projekt:'+proj_sweco+menu,
+            SIGMA: loadpre+'Sigma.prg'+loadpost+'Projekt:'+proj_sigma+menu,
+            VISTIT: loadpre+'VistIT.prg'+loadpost+'Projekt:'+proj_vistit+menu,
+            SOGETI: loadpre+'Sogeti.prg'+loadpost+'Projekt:'+proj_sogeti+menu,
+            STONEBRIX: loadpre+'Stonebrix.prg'+loadpost+'Projekt:'+proj_stonebrix+menu,
+            RAPIDINFORMATION: loadpre+'RapidInformation.prg'+loadpost+'Projekt:'+proj_rapidinformation+menu,
+            ACTIVEMEDIAGROUP: loadpre+'ActiveMediaGroup.prg'+loadpost+'Projekt:'+proj_amg+menu,
+            INTENTIACONSULTING: loadpre+'IntentiaConsulting.prg'+loadpost+'Projekt:'+proj_intentia+menu,
+            FUNCOM: loadpre+'Funcom.prg'+loadpost+'Projekt:'+proj_funcom+menu,
+            TOSHISOFTWARE: loadpre+'ToshiSoftware.prg'+loadpost+'Projekt:'+proj_toshi+menu,
+            ALLAPROJEKT: loadpre+'AllProjects.prg'+loadpost+'__Alla projekt:__\n\n___Botek Systems___'+proj_botek+"\n___Saft batteries___"+proj_saft+"\n___Sweco Position___"+proj_sweco+"\n___Sigma___"+proj_sigma+"\n___VistIT___"+proj_vistit+"\n___Sogeti___"+proj_sogeti+"\n___Stonebrix___"+proj_stonebrix+"\n___Rapid Information___"+proj_rapidinformation+"\n___Active Media Group___"+proj_amg+"\n___Intentia___"+proj_intentia+"\n___FUNCOM___"+proj_funcom+"\n___Toshi Software___"+proj_toshi+menu,
+            RUN: loadpre+'WHOAMI.PRG'+loadpost+presentation,
+            RESET: "\\p\\c_READY._\n",
+            REBOOT: "\\c"+boot+"\\pLOAD \"WHOAMI.PRG\",8\n"+presentation,
+            LIST: "\n10 SYS 49152;\n_READY._\n",
+            HELP: ""+menu,
+            HJÄLP: ""+menu,
+            CLS: "\\c\\p_READY._\n",
+            CUBEON: "\n\\r_READY._\n",
+            CUBEOFF: "\n\\u_READY._\n",
+            LOADCUBEPRG8: "\n\\pRUN\n\\r\\p_READY._\n",
+            LOADWHOAMIPRG8: "\n"+presentation,
+            LOADEMPLOYMENTPRG8: "\n"+proj_botek+"\n"+proj_saft+"\n"+proj_sweco+"\n"+proj_sigma+"\n"+proj_vistit+"\n"+proj_sogeti+"\n"+proj_stonebrix+"\n"+proj_rapidinformation+"\n"+proj_amg+"\n"+proj_intentia+"\n"+proj_funcom+"\n"+proj_toshi+"\n\\p_READY._\n",
+        };
+        
+        
+        let index = 0;
+        document.addEventListener('click', function (event) {
+            if (event.target.matches('.internal-link')) {
+                event.preventDefault();                
+                const newText = event.target.dataset.linkText;
+                index = 0;
+                text = myStrings[newText.toUpperCase()];
+                typeText();
+            }
+        });
+        function resetCursorAnimation() {
+            cursor.style.animation = 'none';
+            setTimeout(() => {
+                cursor.style.animation = '';
+            }, 0);
+        }
+
+        function formatText(text) {
+            return text
+            .replace(/\[\s*(.+?)\s*\]\(\s*((?:http|javascript|mailto|tel)[^\s\)]+(?:\([^\)]*\))?[^\s\)]*)\s*\)/gi, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')            
+            .replace(/\_\_\_(.*?)\_\_\_/g, '<strong><em>$1</em></strong>')
+            .replace(/\_\_(.*?)\_\_/g, '<strong>$1</strong>')
+            .replace(/\_(.*?)\_/g, '<em>$1</em>')
+            .replace(/\[\[(.+?)\]\]/g, '<a href="#" class="internal-link" data-link-text="$1">$1</a>');
+            
+        }
+
+        function clearScreen() {
+            const terminal = document.querySelector('.terminal');
+            const textNodes = Array.from(terminal.childNodes).filter(
+                (node) => node.nodeName !== 'CANVAS'
+            );
+
+            for (const node of textNodes) {
+                terminal.removeChild(node);
+            }
+
+            terminal.appendChild(cursor);
+            resetCursorAnimation();
+        }
+
+
+        function observeTerminalSize() {
+            const terminal = document.querySelector('.terminal');
+            const observer = new ResizeObserver(() => {
+                scrollToBottom();
+            });
+
+            observer.observe(terminal);
+        }
+
+        function scrollToBottom() {
+            cursor.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+
+        function typeText() {
+            if (isInterrupted) {
+                text="\nBREAK IN "+(Math.floor(Math.random() * (66 - 30 + 1)) + 30) + "" + menu;
+                index = 0;
+                isInterrupted = false;
+                //return;
+            }
+            if (index < text.length) {
+                if (index === 0) {
+                    observeTerminalSize();
+                }                
+                if (text[index] === '\n') {
+                    cursor.insertAdjacentHTML('beforebegin', '<br>');
+                    scrollToBottom();
+                } else if (text[index] === '_' || text[index] === '__' || text[index] === '___') {
+                    const match = text.slice(index).match(/(\_{1,3})(.+?)\1/);
+                    if (match) {
+                        cursor.insertAdjacentHTML('beforebegin', formatText(match[0]));
+                        index += match[0].length - 1;
+                    } else {
+                        cursor.insertAdjacentText('beforebegin', text[index]);
+                    }
+                } else if (text[index] === '[' || text[index] === '!') {
+                    const externalLinkMatch = text.slice(index).match(/^\[(.+?)\]\((.+?)\)/);
+                    const internalLinkMatch = text.slice(index).match(/^\[\[(.+?)\]\]/);
+                    const imageMatch = text.slice(index).match(/^\!\[\[(.+?)\]\]/);
+//console.log(text.slice(index), externalLinkMatch, internalLinkMatch, imageMatch)
+                    if (externalLinkMatch) {
+//                        console.log("externalLinkMatch");
+                        cursor.insertAdjacentHTML('beforebegin', formatText(externalLinkMatch[0]));
+                        index += externalLinkMatch[0].length - 1;
+                    } else if (imageMatch) {
+//                        console.log("imageMatch");
+                        const imageUrl = imageMatch[1];
+                        cursor.insertAdjacentHTML('beforebegin', `<img src="${imageUrl}" style="max-width: 100%;"><br>`);
+                        index += imageMatch[0].length - 1;                        
+                    } else if (internalLinkMatch) {
+//                        console.log("internalLinkMatch");
+                        cursor.insertAdjacentHTML('beforebegin', formatText(internalLinkMatch[0]));
+                        index += internalLinkMatch[0].length - 1;
+
+                    } else {
+                        cursor.insertAdjacentText('beforebegin', text[index]);
+                    }                   
+                } else if (text[index] === '\\') {
+                    if (index + 1 < text.length && text[index + 1] === 'p') {
+                        index++; // Skip the 'p' character.
+                        resetCursorAnimation();
+                        index++;
+                        setTimeout(typeText, 1100); // Pause for 1 second before continuing.
+                        return;
+                    } else if (text[index + 1] === 'c') {
+                        index++; // Skip the 'c' character.
+                        clearScreen(); // Clear the screen.                                    
+                    } else if (text[index + 1] === 'r') {
+                        canvas_cube.style.display='block';
+                        index++;
+                    } else if (text[index + 1] === 'u') {
+                        canvas_cube.style.display='none';
+                        index++;
+                    } else {
+                        cursor.insertAdjacentText('beforebegin', text[index]);
+                    }
+                } else {
+                    cursor.insertAdjacentText('beforebegin', text[index]);
+                }
+                resetCursorAnimation();
+                index++;
+                setTimeout(typeText, 25);
+            }else{
+                isTypingEnabled=true;
+            }
+        }
+        
+        function removeCharacterBeforeCursor() {
+            let currentNode = cursor.previousSibling;
+
+            while (currentNode) {
+                if (currentNode.nodeType === Node.TEXT_NODE) {
+                    if (currentNode.textContent.length > 0) {
+                        currentNode.textContent = currentNode.textContent.slice(0, -1);
+                        return;
+                    }
+                } else if (currentNode.tagName === 'BR') {
+                    //terminalText.removeChild(currentNode);
+                    return;
+                }
+                currentNode = currentNode.previousSibling;
+            }
+        }
+
+        function getTextOnLastLineBeforeCursor() {
+            let currentNode = cursor.previousSibling;
+            let textOnLastLineBeforeCursor = '';
+
+            while (currentNode) {
+                if (currentNode.nodeType === Node.TEXT_NODE) {
+                    const textContent = currentNode.textContent;
+                    const lastNewLineIndex = textContent.lastIndexOf('\n');
+                    if (lastNewLineIndex !== -1) {
+                        textOnLastLineBeforeCursor = textContent.slice(lastNewLineIndex + 1) + textOnLastLineBeforeCursor;
+                        break;
+                    } else {
+                        textOnLastLineBeforeCursor = textContent + textOnLastLineBeforeCursor;
+                    }
+                } else if (currentNode.tagName === 'BR') {
+                    break;
+                }
+                currentNode = currentNode.previousSibling;
+            }
+
+            return textOnLastLineBeforeCursor;
+        }
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'ScrollLock' || event.code === 'ScrollLock') {
+                console.log("Paused!");
+                isPaused = !isPaused;
+            }
+
+            if (event.ctrlKey && event.key === 'c') {
+                isInterrupted = true;
+            }
+
+            if (isTypingEnabled && !event.ctrlKey) {
+                if (event.key.length === 1) { // Only print characters, not special keys like 'Shift'
+                    cursor.insertAdjacentText('beforebegin', event.key);
+                } else if (event.key === 'Enter') {
+                    console.log(getTextOnLastLineBeforeCursor());
+                    if (getTextOnLastLineBeforeCursor().length > 0) {
+                        const newText=getTextOnLastLineBeforeCursor().toUpperCase();
+                        console.log("DEBUG:"+newText.replace(/[,". ]/g, ""));
+                        if(myStrings[newText.replace(/[,". ]/g, "")]){
+                            text=myStrings[newText.replace(/[,". ]/g, "")];
+                            index = 0;
+                            isInterrupted = false;
+                            isTypingEnabled=true;
+                            typeText();
+                        } else if (virtualCmds[newText.split(" ")[0]]) {                            
+                            const cmd = virtualCmds[newText.split(" ")[0]];
+                            const secondPart = newText.slice(cmd.length + 1);
+                            if (cmd==="PRINT"){
+                                let n="";
+                                try{
+                                    n=eval(secondPart);
+                                }catch(error){
+                                    n=secondPart;
+                                }
+                                
+                                if (n===undefined){
+                                    n=secondPart;
+                                }
+                                text="\n"+(""+n).replace(/"/g, "")+"\n_READY._\n";
+                                index = 0;
+                                isInterrupted = false;
+                                isTypingEnabled=true;
+                                typeText();
+                            }else if (cmd==="LOAD"){
+                                let filename=newText.replace(/["',]/g, " ").split(" ")[1];
+                                filename=filename.split(" ")[0];                                console.log(">>"+newText.split(" ")[1])
+                                text="\nSEARCHING FOR "+(""+filename)+"\n?DEVICE NOT PRESENT  ERROR\n_READY._\n";
+                                index = 0;
+                                isInterrupted = false;
+                                isTypingEnabled=true;
+                                typeText();
+                            }
+                        }else{
+                            cursor.insertAdjacentHTML('beforebegin', '<br>?SYNTAX  ERROR<br>');
+                        }                        
+                    } else {
+                        cursor.insertAdjacentHTML('beforebegin', '<br>');
+                    }
+                    scrollToBottom();
+                } else if (event.key === 'Backspace') {
+                    removeCharacterBeforeCursor();
+/*
+                    const previousSibling = cursor.previousSibling;
+
+                    if (previousSibling && previousSibling.nodeType === Node.TEXT_NODE) {
+                        const newTextContent = previousSibling.textContent.slice(0, -1);
+                        previousSibling.textContent = newTextContent;
+                    } else if (previousSibling && previousSibling.tagName === 'BR') {
+                        cursor.parentNode.removeChild(previousSibling);
+                    }*/
+                }
+            }
+        });
+
+        typeText();
+    </script>
+</body>
+</html>
